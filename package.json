@@ -1,0 +1,58 @@
+{
+  "name": "@bounceshift/sdk",
+  "version": "1.0.0",
+  "description": "Official BounceShift TypeScript SDK — email validation and deliverability, with an Express middleware.",
+  "license": "MIT",
+  "author": "BounceShift",
+  "homepage": "https://bounceshift.com",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/bounceshift/bounceshift-node.git"
+  },
+  "bugs": {
+    "url": "https://github.com/bounceshift/bounceshift-node/issues"
+  },
+  "keywords": [
+    "bounceshift",
+    "email",
+    "email-validation",
+    "email-verification",
+    "deliverability",
+    "smtp"
+  ],
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "sideEffects": false,
+  "scripts": {
+    "build": "tsup",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.0",
+    "@types/node": "^22.10.0",
+    "tsup": "^8.3.5",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
+  }
+}
