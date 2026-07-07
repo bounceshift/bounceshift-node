@@ -27,6 +27,27 @@ export const VALIDATION_STATUSES: readonly ValidationStatus[] = [
 ] as const;
 
 /**
+ * The action-oriented deliverability recommendation the API returns alongside
+ * the raw {@link ValidationStatus}. This is a higher-level verdict derived
+ * server-side; the SDK surfaces it as-is rather than re-deriving it.
+ */
+export type Recommendation =
+  | 'deliverable'
+  | 'send_with_caution'
+  | 'risky'
+  | 'undeliverable'
+  | 'unknown';
+
+/** All recommendations the SDK knows, used to validate API responses at runtime. */
+export const RECOMMENDATIONS: readonly Recommendation[] = [
+  'deliverable',
+  'send_with_caution',
+  'risky',
+  'undeliverable',
+  'unknown',
+] as const;
+
+/**
  * The result of validating a single email address.
  *
  * Field names are camelCase, mapped from the snake_case keys the API returns.
@@ -54,4 +75,26 @@ export interface ValidationResult {
   creditsUsed: number;
   /** Freeform sub-status detail describing how the verdict was reached. */
   result: Record<string, unknown>;
+  /** Granular reason for the verdict (e.g. `smtp_verified`); `null` when not set. */
+  subStatus: string | null;
+  /**
+   * Action-oriented deliverability recommendation, normalized to a known
+   * {@link Recommendation}. `null` when the API omits it or sends a value this
+   * SDK version does not recognize — in the latter case the original string is
+   * preserved in {@link ValidationResult.recommendationRaw}.
+   */
+  recommendation: Recommendation | null;
+  /**
+   * The recommendation string exactly as the API sent it, kept even when it is
+   * not a known {@link Recommendation}. `null` when the API omits it.
+   */
+  recommendationRaw: string | null;
+  /**
+   * Quality score, 0–100. Its own signal: it currently tracks `confidence` but
+   * may diverge, so it is modeled separately. `null` when the API omits it
+   * (e.g. some error paths).
+   */
+  qualityScore: number | null;
+  /** Plain-English sentence describing the verdict; `null` when the API omits it. */
+  explanation: string | null;
 }

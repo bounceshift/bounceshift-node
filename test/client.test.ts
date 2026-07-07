@@ -6,6 +6,7 @@ import {
   BounceShiftError,
   ForbiddenError,
   InsufficientCreditsError,
+  isSendable,
   RateLimitError,
 } from '../src/index.js';
 import { jsonResponse, mockFetchSequence, rawSuccessBody } from './helpers.js';
@@ -41,6 +42,11 @@ describe('BounceShift.validate — success mapping', () => {
           is_role_account: true,
           from_cache: true,
           credits_used: 0,
+          sub_status: 'unverifiable_catch_all',
+          recommendation: 'send_with_caution',
+          // Intentionally != confidence to prove it is mapped as its own field.
+          quality_score: 68,
+          explanation: 'The domain accepts all mail; the mailbox is unconfirmed.',
         })
       ),
     ]);
@@ -59,6 +65,11 @@ describe('BounceShift.validate — success mapping', () => {
       fromCache: true,
       creditsUsed: 0,
       result: { sub_status: 'mailbox_found' },
+      subStatus: 'unverifiable_catch_all',
+      recommendation: 'send_with_caution',
+      recommendationRaw: 'send_with_caution',
+      qualityScore: 68,
+      explanation: 'The domain accepts all mail; the mailbox is unconfirmed.',
     });
   });
 
@@ -122,6 +133,124 @@ describe('BounceShift.validate — success mapping', () => {
     const result = await makeClient().validate('user@example.com');
 
     expect(result.result).toEqual({});
+  });
+});
+
+describe('BounceShift.validate — recommendation & quality fields', () => {
+  it('parses sub_status, recommendation, quality_score, and explanation', async () => {
+    mockFetchSequence([
+      jsonResponse(
+        200,
+        rawSuccessBody({
+          status: 'valid',
+          confidence: 99,
+          sub_status: 'delivery_history_strong',
+          recommendation: 'deliverable',
+          quality_score: 88,
+          explanation: 'Recent deliveries confirm this mailbox is active.',
+        })
+      ),
+    ]);
+
+    const result = await makeClient().validate('user@example.com');
+
+    expect(result.subStatus).toBe('delivery_history_strong');
+    expect(result.recommendation).toBe('deliverable');
+    expect(result.recommendationRaw).toBe('deliverable');
+    expect(result.qualityScore).toBe(88);
+    expect(result.explanation).toBe(
+      'Recent deliveries confirm this mailbox is active.'
+    );
+    expect(isSendable(result)).toBe(true);
+  });
+
+  it('treats send_with_caution as sendable', async () => {
+    mockFetchSequence([
+      jsonResponse(
+        200,
+        rawSuccessBody({ status: 'catch_all', recommendation: 'send_with_caution' })
+      ),
+    ]);
+
+    const result = await makeClient().validate('user@example.com');
+
+    expect(result.recommendation).toBe('send_with_caution');
+    expect(isSendable(result)).toBe(true);
+  });
+
+  it('treats risky/undeliverable/unknown recommendations as not sendable', async () => {
+    for (const recommendation of ['risky', 'undeliverable', 'unknown'] as const) {
+      mockFetchSequence([
+        jsonResponse(200, rawSuccessBody({ status: 'risky', recommendation })),
+      ]);
+
+      const result = await makeClient().validate('user@example.com');
+
+      expect(result.recommendation).toBe(recommendation);
+      expect(isSendable(result)).toBe(false);
+    }
+  });
+
+  it('does not throw when recommendation is null and defaults new fields safely', async () => {
+    mockFetchSequence([
+      jsonResponse(
+        200,
+        rawSuccessBody({
+          status: 'unknown',
+          recommendation: null,
+          sub_status: null,
+          quality_score: null,
+          explanation: null,
+        })
+      ),
+    ]);
+
+    const result = await makeClient().validate('user@example.com');
+
+    expect(result.recommendation).toBeNull();
+    expect(result.recommendationRaw).toBeNull();
+    expect(result.subStatus).toBeNull();
+    expect(result.qualityScore).toBeNull();
+    expect(result.explanation).toBeNull();
+    expect(isSendable(result)).toBe(false);
+  });
+
+  it('does not throw when the new fields are entirely absent', async () => {
+    // A pre-upgrade / error-path payload that omits the new fields must still
+    // parse; absent fields default to null.
+    const body = rawSuccessBody({ status: 'valid' });
+    delete body.sub_status;
+    delete body.recommendation;
+    delete body.quality_score;
+    delete body.explanation;
+    mockFetchSequence([jsonResponse(200, body)]);
+
+    const result = await makeClient().validate('user@example.com');
+
+    expect(result.status).toBe('valid');
+    expect(result.subStatus).toBeNull();
+    expect(result.recommendation).toBeNull();
+    expect(result.recommendationRaw).toBeNull();
+    expect(result.qualityScore).toBeNull();
+    expect(result.explanation).toBeNull();
+    expect(isSendable(result)).toBe(false);
+  });
+
+  it('does not throw on an unknown recommendation string and keeps it accessible', async () => {
+    mockFetchSequence([
+      jsonResponse(
+        200,
+        rawSuccessBody({ status: 'valid', recommendation: 'brand_new_verdict' })
+      ),
+    ]);
+
+    const result = await makeClient().validate('user@example.com');
+
+    // Unknown value is not thrown on: normalized recommendation is null, but
+    // the raw string is preserved and it is treated as not sendable.
+    expect(result.recommendation).toBeNull();
+    expect(result.recommendationRaw).toBe('brand_new_verdict');
+    expect(isSendable(result)).toBe(false);
   });
 });
 

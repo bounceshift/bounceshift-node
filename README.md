@@ -19,7 +19,7 @@ npm install @bounceshift/sdk
 ## Quickstart
 
 ```ts
-import { BounceShift, isSafeToSend } from '@bounceshift/sdk';
+import { BounceShift, isSafeToSend, isSendable } from '@bounceshift/sdk';
 
 const client = new BounceShift({
   apiKey: process.env.BOUNCESHIFT_API_KEY!,
@@ -30,32 +30,61 @@ const client = new BounceShift({
 
 const result = await client.validate('user@example.com');
 
-console.log(result.status);       // 'valid' | 'catch_all' | 'invalid' | ...
-console.log(result.confidence);   // 0–100
-console.log(result.smtpValid);    // boolean | null
-console.log(isSafeToSend(result)); // true when status is 'valid' or 'catch_all'
+console.log(result.status);         // 'valid' | 'catch_all' | 'invalid' | ...
+console.log(result.confidence);     // 0–100
+console.log(result.smtpValid);      // boolean | null
+console.log(result.recommendation); // 'deliverable' | 'send_with_caution' | ...
+console.log(result.qualityScore);   // 0–100 | null
+console.log(result.explanation);    // plain-English verdict | null
+console.log(isSafeToSend(result));  // true when status is 'valid' or 'catch_all'
+console.log(isSendable(result));    // true when recommendation says to send
 ```
 
 `validate()` returns a `ValidationResult` with camelCase fields mapped from the
 API's snake_case payload:
 
-| Field           | Type                      |
-| --------------- | ------------------------- |
-| `email`         | `string`                  |
-| `status`        | `ValidationStatus`        |
-| `confidence`    | `number` (0–100)          |
-| `mxFound`       | `boolean`                 |
-| `smtpValid`     | `boolean \| null`         |
-| `isDisposable`  | `boolean`                 |
-| `isCatchAll`    | `boolean`                 |
-| `isRoleAccount` | `boolean`                 |
-| `fromCache`     | `boolean`                 |
-| `creditsUsed`   | `number`                  |
-| `result`        | `Record<string, unknown>` |
+| Field               | Type                        |
+| ------------------- | --------------------------- |
+| `email`             | `string`                    |
+| `status`            | `ValidationStatus`          |
+| `confidence`        | `number` (0–100)            |
+| `mxFound`           | `boolean`                   |
+| `smtpValid`         | `boolean \| null`           |
+| `isDisposable`      | `boolean`                   |
+| `isCatchAll`        | `boolean`                   |
+| `isRoleAccount`     | `boolean`                   |
+| `fromCache`         | `boolean`                   |
+| `creditsUsed`       | `number`                    |
+| `result`            | `Record<string, unknown>`   |
+| `subStatus`         | `string \| null`            |
+| `recommendation`    | `Recommendation \| null`    |
+| `recommendationRaw` | `string \| null`            |
+| `qualityScore`      | `number \| null` (0–100)    |
+| `explanation`       | `string \| null`            |
 
 `ValidationStatus` is one of:
 `valid`, `invalid`, `risky`, `catch_all`, `unknown`, `disposable`, `spamtrap`,
 `abuse`, `do_not_mail`.
+
+### Recommendation
+
+`recommendation` is the API's action-oriented deliverability verdict, surfaced
+as-is (the SDK does not re-derive it from `status`). It is one of:
+`deliverable`, `send_with_caution`, `risky`, `undeliverable`, `unknown`.
+
+`isSendable(result)` (or `isSendable(recommendation)`) returns `true` only for
+`deliverable` and `send_with_caution`.
+
+The SDK tolerates the unexpected: if the API omits `recommendation` or sends a
+value this SDK version doesn't know, `recommendation` is `null` (the exact
+string is still available on `recommendationRaw`) and `isSendable()` returns
+`false` — it never throws. `subStatus`, `qualityScore`, and `explanation` are
+`null` when the API omits them (e.g. some error paths).
+
+- `subStatus` — granular reason for the verdict (e.g. `smtp_verified`).
+- `qualityScore` — a 0–100 score modeled separately from `confidence`; it
+  currently tracks `confidence` but may diverge.
+- `explanation` — a plain-English sentence describing the verdict.
 
 ## Error handling
 

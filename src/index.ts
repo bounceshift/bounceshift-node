@@ -1,8 +1,11 @@
 export { BounceShift, SDK_VERSION } from './client.js';
 export type { BounceShiftOptions } from './client.js';
 export { isSafeToSend } from './safe-to-send.js';
+export { isSendable } from './sendable.js';
 export {
+  RECOMMENDATIONS,
   VALIDATION_STATUSES,
+  type Recommendation,
   type ValidationResult,
   type ValidationStatus,
 } from './types.js';

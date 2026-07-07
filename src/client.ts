@@ -7,7 +7,9 @@ import {
   RateLimitError,
 } from './errors.js';
 import {
+  RECOMMENDATIONS,
   VALIDATION_STATUSES,
+  type Recommendation,
   type ValidationResult,
   type ValidationStatus,
 } from './types.js';
@@ -54,6 +56,12 @@ interface RawValidationResponse {
   from_cache: boolean | null;
   credits_used: number;
   result: unknown;
+  // Fields added by a newer API; optional so older/error responses that omit
+  // them still parse (additive, backwards-compatible).
+  sub_status?: string | null;
+  recommendation?: string | null;
+  quality_score?: number | null;
+  explanation?: string | null;
 }
 
 /** A response paired with its already-consumed, parsed body. */
@@ -213,7 +221,27 @@ function parseSuccess(body: unknown): ValidationResult {
     // The API casts an empty sub-status to a PHP array, which serializes to
     // `[]`; normalize that to an object so the declared type holds.
     result: isPlainObject(body.result) ? body.result : {},
+    // Additive fields: tolerate absent/null and unknown values — never throw.
+    subStatus: typeof body.sub_status === 'string' ? body.sub_status : null,
+    recommendation: toKnownRecommendation(body.recommendation),
+    recommendationRaw:
+      typeof body.recommendation === 'string' ? body.recommendation : null,
+    qualityScore:
+      typeof body.quality_score === 'number' ? body.quality_score : null,
+    explanation: typeof body.explanation === 'string' ? body.explanation : null,
   };
+}
+
+/**
+ * Normalize an incoming recommendation to a known {@link Recommendation}.
+ * Returns null for a missing, null, or unrecognized value so an unexpected
+ * server string never throws (the raw value is preserved separately).
+ */
+function toKnownRecommendation(value: unknown): Recommendation | null {
+  return typeof value === 'string' &&
+    (RECOMMENDATIONS as readonly string[]).includes(value)
+    ? (value as Recommendation)
+    : null;
 }
 
 function isHttpsUrl(value: string): boolean {

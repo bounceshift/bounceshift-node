@@ -16,6 +16,10 @@ export function rawSuccessBody(
     from_cache: false,
     credits_used: 1,
     result: { sub_status: 'mailbox_found' },
+    sub_status: 'smtp_verified',
+    recommendation: 'deliverable',
+    quality_score: 95,
+    explanation: 'The mailbox exists and accepts mail.',
     ...overrides,
   };
 }

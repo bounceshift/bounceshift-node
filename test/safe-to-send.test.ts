@@ -14,6 +14,11 @@ function result(status: ValidationResult['status']): ValidationResult {
     fromCache: false,
     creditsUsed: 1,
     result: {},
+    subStatus: null,
+    recommendation: null,
+    recommendationRaw: null,
+    qualityScore: null,
+    explanation: null,
   };
 }
 
