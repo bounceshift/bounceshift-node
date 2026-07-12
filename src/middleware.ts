@@ -1,4 +1,5 @@
 import { BounceShift } from './client.js';
+import { isDegraded } from './degraded.js';
 import { BounceShiftError } from './errors.js';
 import type { ValidationResult, ValidationStatus } from './types.js';
 
@@ -73,9 +74,11 @@ const STRICT_BLOCKED: ReadonlySet<ValidationStatus> = new Set<ValidationStatus>(
  * confidence `unknown` for perfectly good mailboxes — enabling these options
  * trades signup conversion for stricter filtering. Use with care.
  *
- * The middleware **fails open**: any {@link BounceShiftError} (outage,
- * timeout, rate limit, auth misconfig) calls `next()` so an API problem never
- * blocks signups. Unexpected non-SDK errors are passed to `next(error)`.
+ * The middleware **fails open**: any SDK failure (outage, timeout, rate limit,
+ * out of credits, auth misconfig) calls `next()` so an API problem never blocks
+ * signups — even in `strict` mode. It fails open via the client's
+ * `validateSafe()`, so pass an `onDegraded` hook to the client to observe/alert
+ * on these events. Unexpected non-SDK errors are passed to `next(error)`.
  */
 export function deliverableEmail(options: DeliverableEmailOptions = {}) {
   const client = options.client;
@@ -104,14 +107,19 @@ export function deliverableEmail(options: DeliverableEmailOptions = {}) {
 
     let result: ValidationResult;
     try {
-      result = await client.validate(email);
+      result = await client.validateSafe(email);
     } catch (error) {
-      if (error instanceof BounceShiftError) {
-        // Fail open: never block a signup on an API failure.
-        next();
-        return;
-      }
+      // validateSafe swallows every SDK failure, so only an unexpected non-SDK
+      // error reaches here — hand it to the error pipeline.
       next(error);
+      return;
+    }
+
+    // Fail open: a degraded result means validation was unavailable (outage,
+    // timeout, out of credits). Never block the signup — even in strict mode,
+    // where `unknown` would otherwise be rejected.
+    if (isDegraded(result)) {
+      next();
       return;
     }
 

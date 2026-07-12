@@ -15,7 +15,7 @@ import {
 } from './types.js';
 
 /** The SDK version, sent as part of the User-Agent header. */
-export const SDK_VERSION = '1.0.0';
+export const SDK_VERSION = '1.2.0';
 
 const DEFAULT_BASE_URL = 'https://api.bounceshift.com/v1';
 const DEFAULT_TIMEOUT_MS = 10_000;
@@ -36,6 +36,13 @@ export interface BounceShiftOptions {
   timeoutMs?: number;
   /** Number of retries for 429 / 5xx responses. Defaults to 2. */
   retries?: number;
+  /**
+   * Called whenever {@link BounceShift.validateSafe} (and the fail-open
+   * middleware) degrades — i.e. gives up on a failure and returns an unverified
+   * result. Use it to log or alert (e.g. out of credits, or an outage) without
+   * blocking the caller. Anything this hook throws is swallowed.
+   */
+  onDegraded?: (error: BounceShiftError, email: string) => void;
 }
 
 /**
@@ -82,6 +89,8 @@ export class BounceShift {
 
   readonly #retries: number;
 
+  readonly #onDegraded: ((error: BounceShiftError, email: string) => void) | undefined;
+
   constructor(options: BounceShiftOptions) {
     if (!options.apiKey) {
       throw new BounceShiftError('apiKey is required.');
@@ -100,6 +109,7 @@ export class BounceShift {
     this.#baseUrl = baseUrl.replace(/\/+$/, '');
     this.#timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
     this.#retries = options.retries ?? DEFAULT_RETRIES;
+    this.#onDegraded = options.onDegraded;
   }
 
   /**
@@ -160,6 +170,41 @@ export class BounceShift {
   }
 
   /**
+   * Validate without ever throwing on a failure — fail open.
+   *
+   * For hot paths (e.g. validate-on-signup) where a validation problem must
+   * never block the user. On any SDK failure — out of credits (402), an API
+   * outage (5xx), a timeout, or a network error — it returns a degraded
+   * {@link ValidationResult} (`status: 'unknown'`, `creditsUsed: 0`, and
+   * {@link isDegraded} true) and invokes the `onDegraded` hook, instead of
+   * throwing. Use {@link BounceShift.validate} to handle the typed errors
+   * yourself. Unexpected non-SDK errors are not swallowed.
+   */
+  async validateSafe(email: string): Promise<ValidationResult> {
+    try {
+      return await this.validate(email);
+    } catch (error) {
+      if (error instanceof BounceShiftError) {
+        this.#reportDegraded(error, email);
+        return degradedResult(email, error.message);
+      }
+      throw error;
+    }
+  }
+
+  /** Invoke the `onDegraded` hook, never letting it break the caller's flow. */
+  #reportDegraded(error: BounceShiftError, email: string): void {
+    if (this.#onDegraded === undefined) {
+      return;
+    }
+    try {
+      this.#onDegraded(error, email);
+    } catch {
+      // An observability hook must never break the caller's flow.
+    }
+  }
+
+  /**
    * Perform one request. A single abort timer covers BOTH the fetch and the
    * response-body read, so a server that streams headers quickly and then
    * stalls the body cannot hang the call past `timeoutMs`.
@@ -192,6 +237,29 @@ export class BounceShift {
       clearTimeout(timer);
     }
   }
+}
+
+/** Build the degraded result returned by {@link BounceShift.validateSafe} on failure. */
+function degradedResult(email: string, reason: string): ValidationResult {
+  return {
+    email,
+    status: 'unknown',
+    confidence: 0,
+    mxFound: false,
+    smtpValid: null,
+    isDisposable: false,
+    isCatchAll: false,
+    isRoleAccount: false,
+    fromCache: false,
+    creditsUsed: 0,
+    result: { degraded: true, reason },
+    subStatus: 'validation_unavailable',
+    recommendation: null,
+    recommendationRaw: null,
+    qualityScore: null,
+    explanation:
+      'Validation was unavailable, so the address was returned without a verdict.',
+  };
 }
 
 function parseSuccess(body: unknown): ValidationResult {

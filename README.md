@@ -124,6 +124,38 @@ try {
 a numeric `Retry-After` header clamped to 60 seconds. Your API key is never
 logged or included in error output.
 
+## Fail open — never block your users
+
+On a hot path such as validate-on-signup, a validation problem should never
+block the user. `validate()` throws; `validateSafe()` **never** does. If your
+account runs out of credits, or the API is down or timing out, it returns a
+degraded result instead of throwing, so you can let the address through:
+
+```ts
+import { BounceShift, isDegraded, isSafeToSend } from '@bounceshift/sdk';
+
+const client = new BounceShift({
+  apiKey: process.env.BOUNCESHIFT_API_KEY!,
+  organizationId: process.env.BOUNCESHIFT_ORG_ID!,
+  // Optional: observe every fail-open (out of credits, outage, timeout).
+  onDegraded: (error, email) => logger.warn('bounceshift degraded', { email, error }),
+});
+
+const result = await client.validateSafe('user@example.com');
+
+if (isDegraded(result)) {
+  // We couldn't reach a verdict — let it through, and your onDegraded hook fired.
+} else if (!isSafeToSend(result)) {
+  // A real verdict came back and it's not safe — reject as usual.
+}
+```
+
+A degraded result has `status: 'unknown'`, `creditsUsed: 0`, and
+`isDegraded(result) === true`, so you can always tell "we couldn't check" apart
+from a genuine `unknown` verdict. `timeoutMs` bounds how long a stalled API can
+hold your request before `validateSafe()` gives up. Works on any stack —
+Next.js route handlers, Fastify, serverless, workers — not just Express.
+
 ## Express middleware
 
 `deliverableEmail` validates an email on the request body and rejects
@@ -169,10 +201,12 @@ Options:
 
 ### Fail-open by design
 
-If the API is unreachable, times out, is rate limited, or misconfigured, the
-middleware **calls `next()`** and lets the request through — an outage will
-never block your signups. (Unexpected non-SDK errors are forwarded to
-`next(error)`.)
+If the API is unreachable, times out, is rate limited, out of credits, or
+misconfigured, the middleware **calls `next()`** and lets the request through —
+even in `strict` mode — so an outage never blocks your signups. It fails open
+via the client's `validateSafe()`, so pass an `onDegraded` hook to the client
+(see [Fail open](#fail-open--never-block-your-users)) to log/alert when it does.
+(Unexpected non-SDK errors are forwarded to `next(error)`.)
 
 ### ⚠️ `strict` / `minConfidence` can reject real users
 
