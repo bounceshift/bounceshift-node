@@ -131,6 +131,20 @@ describe('deliverableEmail — fail open', () => {
     expect(res.statusCode).toBeUndefined();
   });
 
+  it('fails open even in strict mode when the client throws', async () => {
+    const client = stubClient(async () => {
+      throw new BounceShiftError('API down');
+    });
+    const mw = deliverableEmail({ client, strict: true });
+    const { req, res, next } = fakeReqRes('user@example.com');
+
+    await mw(req, res, next);
+
+    // A degrade must never be blocked, even though strict mode rejects `unknown`.
+    expect(next).toHaveBeenCalledWith();
+    expect(res.statusCode).toBeUndefined();
+  });
+
   it('passes non-SDK errors to next(error)', async () => {
     const boom = new TypeError('unexpected');
     const client = stubClient(async () => {
