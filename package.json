@@ -1,6 +1,6 @@
 {
   "name": "@bounceshift/sdk",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Official BounceShift TypeScript SDK — email validation and deliverability, with an Express middleware.",
   "license": "MIT",
   "author": "BounceShift",

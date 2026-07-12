@@ -123,7 +123,7 @@ describe('BounceShift.validate — success mapping', () => {
     expect(headers.Authorization).toBe('Bearer secret-key');
     expect(headers['X-Organization-ID']).toBe('org_123');
     expect(headers.Accept).toBe('application/json');
-    expect(headers['User-Agent']).toBe('@bounceshift/sdk/1.1.0');
+    expect(headers['User-Agent']).toBe('@bounceshift/sdk/1.2.0');
     expect(init.body).toBe(JSON.stringify({ email: 'user@example.com' }));
   });
 

@@ -15,7 +15,7 @@ import {
 } from './types.js';
 
 /** The SDK version, sent as part of the User-Agent header. */
-export const SDK_VERSION = '1.1.0';
+export const SDK_VERSION = '1.2.0';
 
 const DEFAULT_BASE_URL = 'https://api.bounceshift.com/v1';
 const DEFAULT_TIMEOUT_MS = 10_000;
