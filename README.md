@@ -36,6 +36,7 @@ console.log(result.smtpValid);      // boolean | null
 console.log(result.recommendation); // 'deliverable' | 'send_with_caution' | ...
 console.log(result.qualityScore);   // 0–100 | null
 console.log(result.explanation);    // plain-English verdict | null
+console.log(result.didYouMean);     // 'grace@gmail.com' for grace@gmil.com | null
 console.log(isSafeToSend(result));  // true when status is 'valid' or 'catch_all'
 console.log(isSendable(result));    // true when recommendation says to send
 ```
@@ -61,6 +62,7 @@ API's snake_case payload:
 | `recommendationRaw` | `string \| null`            |
 | `qualityScore`      | `number \| null` (0–100)    |
 | `explanation`       | `string \| null`            |
+| `didYouMean`        | `string \| null`            |
 
 `ValidationStatus` is one of:
 `valid`, `invalid`, `risky`, `catch_all`, `unknown`, `disposable`, `spamtrap`,
@@ -85,6 +87,32 @@ string is still available on `recommendationRaw`) and `isSendable()` returns
 - `qualityScore` — a 0–100 score modeled separately from `confidence`; it
   currently tracks `confidence` but may diverge.
 - `explanation` — a plain-English sentence describing the verdict.
+
+### Typo suggestions
+
+`didYouMean` carries the corrected address when the domain is within a character
+or two of a major provider, and `null` otherwise.
+
+```ts
+const result = await client.validate('grace@gmil.com');
+
+if (result.didYouMean) {
+  // 'grace@gmail.com' — show it, don't swap it
+  promptUser(`Did you mean ${result.didYouMean}?`);
+}
+```
+
+Two things to know:
+
+- **It is advisory.** The API validates the address you sent, never the
+  suggestion, and the verdict is unaffected. Put the correction in front of the
+  person who typed it rather than substituting it — the mailbox at the misspelled
+  domain may genuinely exist, and swapping it silently means mailing an address
+  you were never given.
+- **It is populated on any status**, including `valid` and `disposable`. That is
+  deliberate: misspellings like `gmil.com` and `hotmial.com` are registered and
+  accept mail, so they never bounce and never appear in a bounce report. The
+  suggestion is the only signal you get for them.
 
 ## Error handling
 

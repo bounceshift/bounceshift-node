@@ -26,6 +26,7 @@ function result(
     recommendationRaw,
     qualityScore: 80,
     explanation: null,
+    didYouMean: null,
   };
 }
 

@@ -69,6 +69,7 @@ interface RawValidationResponse {
   recommendation?: string | null;
   quality_score?: number | null;
   explanation?: string | null;
+  did_you_mean?: string | null;
 }
 
 /** A response paired with its already-consumed, parsed body. */
@@ -259,6 +260,7 @@ function degradedResult(email: string, reason: string): ValidationResult {
     qualityScore: null,
     explanation:
       'Validation was unavailable, so the address was returned without a verdict.',
+    didYouMean: null,
   };
 }
 
@@ -297,6 +299,8 @@ function parseSuccess(body: unknown): ValidationResult {
     qualityScore:
       typeof body.quality_score === 'number' ? body.quality_score : null,
     explanation: typeof body.explanation === 'string' ? body.explanation : null,
+    didYouMean:
+      typeof body.did_you_mean === 'string' ? body.did_you_mean : null,
   };
 }
 

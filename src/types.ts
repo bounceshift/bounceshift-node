@@ -97,4 +97,18 @@ export interface ValidationResult {
   qualityScore: number | null;
   /** Plain-English sentence describing the verdict; `null` when the API omits it. */
   explanation: string | null;
+  /**
+   * The corrected address when the domain looks like a misspelling of a major
+   * provider (`gmial.com` -> `gmail.com`); `null` otherwise.
+   *
+   * Advisory only. The API validates the address you sent, never the
+   * suggestion, and the verdict is unaffected — show the correction to whoever
+   * typed the address rather than substituting it, since the mailbox at the
+   * misspelled domain may genuinely exist.
+   *
+   * Populated on any status, including `valid` and `disposable`: misspellings
+   * that resolve accept mail and never bounce, so this is the only signal you
+   * get for them.
+   */
+  didYouMean: string | null;
 }
