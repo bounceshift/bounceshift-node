@@ -70,6 +70,7 @@ describe('BounceShift.validate — success mapping', () => {
       recommendationRaw: 'send_with_caution',
       qualityScore: 68,
       explanation: 'The domain accepts all mail; the mailbox is unconfirmed.',
+      didYouMean: null,
     });
   });
 
@@ -477,5 +478,51 @@ describe('BounceShift construction', () => {
     expect(
       () => new BounceShift({ apiKey: 'k', organizationId: '' })
     ).toThrow(BounceShiftError);
+  });
+});
+
+describe('BounceShift.validate — did_you_mean', () => {
+  it('maps a typo suggestion without touching the address it validated', async () => {
+    mockFetchSequence([
+      jsonResponse(
+        200,
+        rawSuccessBody({
+          email: 'grace@gmil.com',
+          did_you_mean: 'grace@gmail.com',
+        })
+      ),
+    ]);
+
+    const result = await makeClient().validate('grace@gmil.com');
+
+    expect(result.didYouMean).toBe('grace@gmail.com');
+    expect(result.email).toBe('grace@gmil.com');
+  });
+
+  it('carries a suggestion on any status, including disposable', async () => {
+    // Common misspellings are disposable domains too, and those are exactly the
+    // ones that accept mail and never bounce.
+    mockFetchSequence([
+      jsonResponse(
+        200,
+        rawSuccessBody({ status: 'disposable', did_you_mean: 'ada@gmail.com' })
+      ),
+    ]);
+
+    const result = await makeClient().validate('ada@gmial.com');
+
+    expect(result.didYouMean).toBe('ada@gmail.com');
+  });
+
+  it.each([
+    ['absent', {}],
+    ['null', { did_you_mean: null }],
+    ['a non-string', { did_you_mean: 42 }],
+  ])('reports no suggestion when did_you_mean is %s', async (_label, body) => {
+    mockFetchSequence([jsonResponse(200, rawSuccessBody(body))]);
+
+    const result = await makeClient().validate('user@example.com');
+
+    expect(result.didYouMean).toBeNull();
   });
 });

@@ -19,6 +19,7 @@ function result(status: ValidationResult['status']): ValidationResult {
     recommendationRaw: null,
     qualityScore: null,
     explanation: null,
+    didYouMean: null,
   };
 }
 
